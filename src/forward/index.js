@@ -717,17 +717,23 @@ export default class ForwardRunner {
                 throw new Error(`${intent.symbol} would open a short but shorting is not allowed`);
             }
         }
-        let gross = 0, net = 0;
-        for (const [symbol, qty] of Object.entries(projected)) {
-            const px = this.stockPrices[symbol];
-            if (!(px > 0)) continue;
-            gross += Math.abs(qty * px);
-            net += qty * px;
-        }
-        if (gross > this.maxLeverage * sizingEquity) {
+        const exposure = (book) => {
+            let gross = 0, net = 0;
+            for (const [symbol, qty] of Object.entries(book)) {
+                const px = this.stockPrices[symbol];
+                if (!(px > 0)) continue;
+                gross += Math.abs(qty * px);
+                net += qty * px;
+            }
+            return { gross, net };
+        };
+        const { gross, net } = exposure(projected);
+        const now = exposure(this.stockBalances);
+        const EPS = 1e-6 * sizingEquity;
+        if (gross > this.maxLeverage * sizingEquity && gross > now.gross + EPS) {
             throw new Error(`Projected gross ${(gross / sizingEquity).toFixed(2)}x exceeds maxLeverage ${this.maxLeverage}x${this.leverageNote()}`);
         }
-        if (Math.abs(net) > this.maxNetExposure * sizingEquity) {
+        if (Math.abs(net) > this.maxNetExposure * sizingEquity && Math.abs(net) > Math.abs(now.net) + EPS) {
             throw new Error(`Projected net ${(net / sizingEquity).toFixed(2)}x exceeds maxNetExposure ${this.maxNetExposure}x${this.leverageNote()}`);
         }
     }
